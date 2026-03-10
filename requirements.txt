@@ -1,0 +1,35 @@
+# Web framework
+flask==3.1.0
+flask-wtf==1.2.2
+flask-limiter==3.9.0
+
+# Database
+pymongo==4.10.1
+
+# Security / encryption
+cryptography==44.0.0
+werkzeug==3.1.3
+
+# Config
+python-dotenv==1.0.1
+
+# Data handling
+pandas==2.2.3
+openpyxl==3.1.5
+
+# HTML sanitisation
+bleach==6.2.0
+
+# OAuth
+authlib==1.3.0
+
+# Task queue
+celery==5.3.6
+redis==5.0.4
+flower==2.0.1
+
+# Transactional email (system messages)
+sendgrid==6.11.0
+
+# Timezone support
+pytz==2024.2

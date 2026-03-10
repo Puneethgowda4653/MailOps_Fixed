@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Email Templates{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+    <div>
+      <div class="label">// Phase 3 — Campaign Builder</div>
+      <h1>Email Templates</h1>
+      <p>Save reusable email designs and load them instantly in compose.</p>
+    </div>
+    <a href="{{ url_for('compose') }}" class="btn btn-primary">+ New Campaign</a>
+  </div>
+
+  <!-- Save new template -->
+  <div class="card">
+    <div class="card-title">// Save New Template</div>
+    <form method="POST" action="{{ url_for('template_save') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="two-col">
+        <div class="form-group">
+          <label class="form-label">Template Name *</label>
+          <input type="text" name="name" required placeholder="e.g. Monthly Newsletter">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Default Subject</label>
+          <input type="text" name="subject" placeholder="e.g. Your monthly update, {{first_name}}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">HTML Body *</label>
+        <textarea name="body" rows="10"
+          placeholder="Paste your HTML email here. Use {{first_name}}, {{email}} etc. for personalization."></textarea>
+        <p class="form-hint">Merge tags:
+          {% for t in ['first_name','last_name','email'] %}
+          <span class="var-chip">&#123;&#123;{{ t }}&#125;&#125;</span>
+          {% endfor %}
+        </p>
+      </div>
+      <button type="submit" class="btn btn-primary">💾 Save Template</button>
+    </form>
+  </div>
+
+  <!-- Templates list -->
+  {% if templates %}
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table class="data-table">
+      <thead>
+        <tr><th>Name</th><th>Subject</th><th>Created By</th><th>Date</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+        <tr>
+          <td class="text-accent" style="font-weight:600;">{{ t.name }}</td>
+          <td style="color:var(--text-muted);">{{ t.subject or '—' }}</td>
+          <td style="color:var(--text-dim);">{{ t.created_by or '—' }}</td>
+          <td style="color:var(--text-dim);">
+            {{ t.created_at.strftime('%d %b %Y') if t.created_at else '—' }}
+          </td>
+          <td>
+            <div class="flex gap-1">
+              <!-- FIX: use t.id (string), not t._id (ObjectId) -->
+              <a href="{{ url_for('compose') }}?template_id={{ t.id }}"
+                 class="btn btn-primary" style="padding:.25rem .7rem;font-size:.65rem;">
+                ↗ Use in Compose
+              </a>
+              <button onclick="previewTemplate('{{ t.id }}')"
+                      class="btn btn-ghost" style="padding:.25rem .6rem;font-size:.62rem;">
+                Preview
+              </button>
+              <form method="POST" action="{{ url_for('template_delete', template_id=t.id) }}"
+                    onsubmit="return confirm('Delete template {{ t.name }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-ghost" style="padding:.25rem .6rem;font-size:.62rem;color:var(--danger);">
+                  Delete
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card" style="text-align:center;padding:3rem;">
+    <div style="font-size:2rem;margin-bottom:.75rem;">📄</div>
+    <div style="font-family:var(--mono);font-size:.8rem;color:var(--text-dim);">
+      No templates saved yet. Create one above.
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Preview modal -->
+<div id="preview-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999;
+     display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-bright);border-radius:2px;
+              width:90%;max-width:700px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;">
+    <div style="padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-family:var(--mono);font-size:.75rem;color:var(--text-muted);">Template Preview</span>
+      <button onclick="closePreview()" class="btn btn-ghost" style="padding:.3rem .6rem;font-size:.7rem;">✕ Close</button>
+    </div>
+    <div id="preview-content" style="padding:1.5rem;overflow-y:auto;flex:1;background:#fff;color:#000;"></div>
+  </div>
+</div>
+
+<script>
+async function previewTemplate(id) {
+  const r = await fetch(`/api/templates/${id}`);
+  const t = await r.json();
+  document.getElementById('preview-content').innerHTML = t.html_body || '<em>No content</em>';
+  document.getElementById('preview-modal').style.display = 'flex';
+}
+function closePreview() {
+  document.getElementById('preview-modal').style.display = 'none';
+}
+document.getElementById('preview-modal').addEventListener('click', function(e) {
+  if (e.target === this) closePreview();
+});
+</script>
+{% endblock %}

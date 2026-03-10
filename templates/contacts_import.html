@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Import Contacts{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div class="label">// Contacts → Import</div>
+    <h1>Import Contacts</h1>
+    <p>Upload a CSV or Excel file to bulk import contacts into your database.</p>
+  </div>
+
+  <div class="two-col">
+    <div>
+      <div class="card">
+        <div class="card-title">// Upload File</div>
+        <form method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-group">
+            <label class="form-label">CSV or Excel File</label>
+            <div class="file-input-wrap">
+              <input type="file" name="file" accept=".csv,.xlsx,.xls" required>
+              <div class="icon">📄</div>
+              <div class="text">Click to select or drag and drop</div>
+              <div class="sub">.csv, .xlsx, .xls — max 16MB</div>
+            </div>
+          </div>
+
+          {% if lists %}
+          <div class="form-group">
+            <label class="form-label">Add Imported Contacts to Lists (optional)</label>
+            <div style="display:flex;flex-wrap:wrap;gap:.5rem;">
+              {% for l in lists %}
+              <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;
+                            background:var(--surface2);border:1px solid var(--border-bright);
+                            padding:.4rem .75rem;border-radius:2px;font-family:var(--mono);font-size:.72rem;">
+                <input type="checkbox" name="list_ids" value="{{ l.id }}"> {{ l.name }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          <button type="submit" class="btn btn-primary">↑ Import Contacts</button>
+        </form>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-title">// Required Format</div>
+        <p style="color:var(--text-muted);font-size:.82rem;margin-bottom:1rem;">
+          Your file must have an <code class="text-accent">email</code> column.
+          All other columns are optional.
+        </p>
+        <div style="background:var(--surface2);border:1px solid var(--border-bright);padding:1rem;border-radius:2px;font-family:var(--mono);font-size:.72rem;overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr>
+                {% for h in ['email','first_name','last_name','tags'] %}
+                <th style="text-align:left;color:var(--accent);padding:.25rem .5rem;border-bottom:1px solid var(--border);">{{ h }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {% for v in ['john@example.com','John','Smith','vip,customer'] %}
+                <td style="color:var(--text-muted);padding:.25rem .5rem;">{{ v }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                {% for v in ['jane@example.com','Jane','Doe','newsletter'] %}
+                <td style="color:var(--text-muted);padding:.25rem .5rem;">{{ v }}</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top:1rem;">
+          <p style="font-family:var(--mono);font-size:.68rem;color:var(--text-dim);line-height:1.8;">
+            ✓ Duplicate emails are updated, not duplicated<br>
+            ✓ Tags: comma-separated in a single cell<br>
+            ✓ Extra columns are stored as custom fields<br>
+            ✓ All imported contacts default to <span class="text-accent">subscribed</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">// Merge Tags Available After Import</div>
+        <p style="color:var(--text-muted);font-size:.82rem;margin-bottom:.75rem;">
+          Any column in your CSV becomes a merge tag in email templates:
+        </p>
+        <div>
+          {% for tag in ['first_name','last_name','email','company','phone'] %}
+          <span class="var-chip">&#123;&#123;{{ tag }}&#125;&#125;</span>
+          {% endfor %}
+          <span class="var-chip" style="color:var(--text-dim);">&#123;&#123;your_column&#125;&#125;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <a href="{{ url_for('contacts') }}" class="btn btn-ghost">← Back to Contacts</a>
+</div>
+{% endblock %}

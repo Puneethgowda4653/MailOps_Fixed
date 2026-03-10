@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}SMTP Settings{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div class="label">// Settings</div>
+    <h1>SMTP Configuration</h1>
+    <p>Choose your mail provider and enter credentials. Your password is encrypted before storage — it never appears in logs or responses.</p>
+  </div>
+
+  {% if cfg %}
+  <div class="flash success" style="margin-bottom:1.5rem;">
+    ✓ SMTP is configured — sending via <strong>{{ cfg.user }}</strong> ({{ cfg.host }})
+  </div>
+  {% endif %}
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" autocomplete="off">
+
+    <!-- Provider picker -->
+    <div class="card">
+      <div class="card-title">// Mail Provider</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem;margin-bottom:0.75rem;" id="provider-grid">
+        {% for key, prov in providers.items() %}
+        <label class="provider-card" data-key="{{ key }}">
+          <input type="radio" name="provider" value="{{ key }}"
+            {% if (form.get('provider') or (cfg and cfg.provider) or 'microsoft365') == key %}checked{% endif %}
+            onchange="onProviderChange()">
+          <div class="provider-inner">
+            <span class="prov-icon">{{ prov.icon }}</span>
+            <span class="prov-label">{{ prov.label }}</span>
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+
+      <!-- Provider-specific help box — shown dynamically -->
+      <div id="prov-help" style="display:none;margin-top:0.5rem;padding:1rem 1.2rem;border-radius:6px;border:1px solid;font-family:var(--mono);font-size:0.72rem;line-height:1.8;">
+        <div id="prov-help-title" style="font-weight:700;font-size:0.75rem;margin-bottom:0.5rem;"></div>
+        <ol id="prov-help-steps" style="margin:0 0 0.75rem 1.2rem;padding:0;color:var(--text-muted);"></ol>
+        <a id="prov-help-link" href="#" target="_blank" rel="noopener noreferrer"
+          style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.4rem 0.9rem;border-radius:4px;text-decoration:none;font-size:0.7rem;font-weight:600;border:1px solid;">
+          <span>🔗</span><span id="prov-help-link-text"></span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Custom host (shown only for Custom) -->
+    <div class="card" id="custom-fields" style="display:none;">
+      <div class="card-title">// Custom Server</div>
+      <div class="two-col">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">SMTP Host</label>
+          <input type="text" name="custom_host" value="{{ form.get('custom_host','') }}"
+                 placeholder="mail.yourserver.com">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Port</label>
+          <input type="number" name="custom_port" value="{{ form.get('custom_port','587') }}" min="1" max="65535">
+        </div>
+      </div>
+    </div>
+
+    <!-- Credentials -->
+    <div class="card">
+      <div class="card-title">// Credentials</div>
+      <div class="two-col">
+        <div class="form-group">
+          <label class="form-label">SMTP Email / Username</label>
+          <input type="email" name="smtp_user" autocomplete="off"
+                 value="{{ form.get('smtp_user', cfg.user if cfg else '') }}"
+                 placeholder="you@yourcompany.com" required>
+          <p class="form-hint">The email address you send from.</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sender Display Name</label>
+          <input type="text" name="sender_name" autocomplete="off"
+                 value="{{ form.get('sender_name', cfg.sender_name if cfg else '') }}"
+                 placeholder="Acme Corp Notifications" required>
+          <p class="form-hint">Shown as the "From" name in recipients' inboxes.</p>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">
+          Password / App Password
+          {% if cfg %}<span style="color:var(--text-dim);font-weight:400;"> — leave blank to keep current</span>{% endif %}
+        </label>
+        <div style="position:relative;">
+          <input type="password" name="smtp_password" id="smtp-pw" autocomplete="new-password"
+                 placeholder="{{ '••••••••  (currently set)' if cfg else 'App Password or SMTP password' }}"
+                 {% if not cfg %}required{% endif %}
+                 style="padding-right:3rem;">
+          <button type="button" onclick="togglePw()" style="
+            position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);
+            background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:0.85rem;" title="Show/hide">👁</button>
+        </div>
+        <p class="form-hint">
+          Your password is <span class="text-accent">encrypted with AES-256</span> before being stored.
+          It is never logged or returned to the browser.
+        </p>
+      </div>
+    </div>
+
+    <!-- Security info -->
+    <div class="card" style="border-color:#2a3a2a;background:rgba(0,40,20,0.3);">
+      <div class="card-title" style="color:var(--accent);">// Security Notes</div>
+      <div class="two-col" style="gap:1.5rem;">
+        <div>
+          <p style="font-family:var(--mono);font-size:0.7rem;color:var(--accent);margin-bottom:0.3rem;">🔐 Encryption at Rest</p>
+          <p style="font-size:0.78rem;color:var(--text-muted);line-height:1.6;">
+            Your SMTP password is encrypted using Fernet (AES-128-CBC + HMAC-SHA256) before being written to disk. The encryption key is derived from your app's secret key and never stored.
+          </p>
+        </div>
+        <div>
+          <p style="font-family:var(--mono);font-size:0.7rem;color:var(--accent);margin-bottom:0.3rem;">🚫 Never Exposed</p>
+          <p style="font-size:0.78rem;color:var(--text-muted);line-height:1.6;">
+            The password is decrypted in memory only at send time. It is never returned in API responses, never written to logs, and never included in session data.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn btn-primary">Save SMTP Settings →</button>
+      <a href="{{ url_for('index') }}" class="btn btn-ghost">← Dashboard</a>
+    </div>
+  </form>
+</div>
+
+<style>
+.provider-card {
+  cursor:pointer;
+  border:1px solid var(--border);
+  border-radius:2px;
+  padding:0.9rem 1rem;
+  display:block;
+  transition:border-color 0.15s, background 0.15s;
+}
+.provider-card input[type=radio] { display:none; }
+.provider-card:hover { border-color:var(--border-bright); background:var(--surface2); }
+.provider-card:has(input:checked) { border-color:var(--accent); background:var(--accent-glow); }
+.provider-inner { display:flex; align-items:center; gap:0.6rem; }
+.prov-icon { font-size:1.2rem; }
+.prov-label { font-family:var(--mono); font-size:0.72rem; color:var(--text); }
+</style>
+
+<script>
+const PROVIDER_HELP = {
+  microsoft365: {
+    title: "Microsoft 365 / Outlook — How to get your App Password",
+    color: "#4f8ef7",
+    bg: "rgba(79,142,247,0.08)",
+    steps: [
+      "Sign in at <strong>account.microsoft.com</strong>",
+      "Go to <strong>Security → Advanced security options</strong>",
+      "Under <em>App passwords</em>, click <strong>Create a new app password</strong>",
+      "Copy the generated password and paste it below",
+      "Use your full Microsoft email address as the SMTP username"
+    ],
+    linkUrl: "https://account.microsoft.com/security",
+    linkText: "Open Microsoft Account Security →"
+  },
+  gmail: {
+    title: "Gmail / Google Workspace — How to get your App Password",
+    color: "#ea4335",
+    bg: "rgba(234,67,53,0.08)",
+    steps: [
+      "Sign in at <strong>myaccount.google.com</strong>",
+      "Go to <strong>Security</strong> and make sure <em>2-Step Verification is ON</em> (required)",
+      "Search for <strong>App passwords</strong> in the search bar at the top",
+      "Select app: <em>Mail</em> → device: <em>Other</em> → type <em>MailOps</em>",
+      "Click <strong>Generate</strong> — copy the 16-character password",
+      "Use your full Gmail address as the SMTP username"
+    ],
+    linkUrl: "https://myaccount.google.com/apppasswords",
+    linkText: "Open Google App Passwords →"
+  },
+  zoho: {
+    title: "Zoho Mail — How to get your App-Specific Password",
+    color: "#f5801c",
+    bg: "rgba(245,128,28,0.08)",
+    steps: [
+      "Sign in at <strong>accounts.zoho.com</strong>",
+      "Go to <strong>Security → App Passwords</strong>",
+      "Click <strong>Generate New Password</strong>, name it <em>MailOps</em>",
+      "Copy the generated password and paste it below",
+      "Use your full Zoho email address as the SMTP username"
+    ],
+    linkUrl: "https://accounts.zoho.com/home#security/app-password",
+    linkText: "Open Zoho App Passwords →"
+  },
+  yahoo: {
+    title: "Yahoo Mail — How to get your App Password",
+    color: "#6001d2",
+    bg: "rgba(96,1,210,0.08)",
+    steps: [
+      "Sign in at <strong>login.yahoo.com</strong>",
+      "Go to <strong>Account Security</strong> (search in Yahoo Help if needed)",
+      "Enable <em>Two-step verification</em> if not already on",
+      "Scroll to <strong>App passwords</strong> and click <strong>Generate app password</strong>",
+      "Select <em>Other app</em> → type <em>MailOps</em> → click <strong>Generate</strong>",
+      "Copy the password and paste it below"
+    ],
+    linkUrl: "https://login.yahoo.com/account/security",
+    linkText: "Open Yahoo Account Security →"
+  },
+  sendgrid: {
+    title: "SendGrid — How to get your SMTP API Key",
+    color: "#1a82e2",
+    bg: "rgba(26,130,226,0.08)",
+    steps: [
+      "Sign in at <strong>app.sendgrid.com</strong>",
+      "Go to <strong>Settings → API Keys</strong>",
+      "Click <strong>Create API Key</strong> → choose <em>Restricted Access</em>",
+      "Enable <em>Mail Send → Full Access</em>, then click <strong>Create & View</strong>",
+      "Copy the API key — you will only see it once",
+      "<strong>SMTP Username must be the literal text: apikey</strong>",
+      "Paste the API key as the password below"
+    ],
+    linkUrl: "https://app.sendgrid.com/settings/api_keys",
+    linkText: "Open SendGrid API Keys →"
+  },
+  mailgun: {
+    title: "Mailgun — How to get your SMTP Credentials",
+    color: "#e0503a",
+    bg: "rgba(224,80,58,0.08)",
+    steps: [
+      "Sign in at <strong>app.mailgun.com</strong>",
+      "Go to <strong>Sending → Domains</strong> and select your domain",
+      "Click the <strong>SMTP credentials</strong> tab",
+      "Copy the <em>SMTP hostname</em>, <em>Login</em>, and <em>Password</em>",
+      "Use the Login (not your account email) as the SMTP username below",
+      "If you don't see a password, click <strong>Reset password</strong>"
+    ],
+    linkUrl: "https://app.mailgun.com/mg/sending/domains",
+    linkText: "Open Mailgun Domains →"
+  },
+  custom: {
+    title: "Custom SMTP — What you need from your provider",
+    color: "#888",
+    bg: "rgba(136,136,136,0.08)",
+    steps: [
+      "Get the <strong>SMTP hostname</strong> from your provider's help docs (e.g. mail.yourhost.com)",
+      "Get the <strong>port</strong> — usually <em>587 (STARTTLS)</em> or <em>465 (SSL)</em>",
+      "Use your <strong>full email address</strong> as the SMTP username",
+      "Use your <strong>email account password</strong> or an app-specific password",
+      "Check your provider's help center if you are unsure"
+    ],
+    linkUrl: "https://www.google.com/search?q=SMTP+settings+my+email+provider",
+    linkText: "Search for your provider's SMTP settings →"
+  }
+};
+
+const NOTES = {{ providers | tojson }};
+
+function onProviderChange() {
+  const val    = document.querySelector('input[name=provider]:checked')?.value || 'microsoft365';
+  const custom = document.getElementById('custom-fields');
+  const help   = document.getElementById('prov-help');
+  const h      = PROVIDER_HELP[val];
+
+  custom.style.display = val === 'custom' ? '' : 'none';
+
+  if (h) {
+    document.getElementById('prov-help-title').textContent   = h.title;
+    document.getElementById('prov-help-link').href           = h.linkUrl;
+    document.getElementById('prov-help-link-text').textContent = h.linkText;
+    document.getElementById('prov-help-link').style.color       = h.color;
+    document.getElementById('prov-help-link').style.borderColor = h.color;
+    document.getElementById('prov-help-link').style.background  = h.bg;
+
+    const ol = document.getElementById('prov-help-steps');
+    ol.innerHTML = h.steps.map(s => `<li style="margin-bottom:0.25rem;">${s}</li>`).join('');
+
+    help.style.display     = '';
+    help.style.borderColor = h.color;
+    help.style.background  = h.bg;
+    help.style.color       = 'var(--text)';
+  } else {
+    help.style.display = 'none';
+  }
+}
+
+function togglePw() {
+  const pw = document.getElementById('smtp-pw');
+  pw.type = pw.type === 'password' ? 'text' : 'password';
+}
+
+onProviderChange();
+
+document.querySelector('form').addEventListener('submit', function() {
+  const pw = document.getElementById('smtp-pw');
+  if (!pw.value && {{ 'true' if cfg else 'false' }}) pw.removeAttribute('required');
+});
+</script>
+{% endblock %}

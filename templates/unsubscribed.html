@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Unsubscribed{% endblock %}
+{% block content %}
+<div style="min-height:70vh;display:flex;align-items:center;justify-content:center;" class="fade-in">
+  <div style="max-width:480px;width:100%;text-align:center;">
+    <div style="font-size:3rem;margin-bottom:1rem;">✓</div>
+    <div class="card" style="border-color:var(--accent);">
+      <div style="font-family:var(--mono);font-size:.65rem;color:var(--accent);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.75rem;">
+        // Unsubscribed
+      </div>
+      <h2 style="font-size:1.4rem;margin-bottom:.75rem;">You've been unsubscribed</h2>
+      <p style="color:var(--text-muted);font-size:.9rem;line-height:1.7;">
+        <strong class="text-accent">{{ email }}</strong> has been removed from our mailing list.
+        You will no longer receive emails from us.
+      </p>
+      <p style="color:var(--text-dim);font-size:.75rem;margin-top:1.5rem;font-family:var(--mono);">
+        Changed your mind? Contact us to resubscribe.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Contacts{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+    <div>
+      <div class="label">// Phase 2 — Contact Management</div>
+      <h1>Contacts</h1>
+      <p>{{ stats.total }} total &nbsp;·&nbsp; {{ stats.subscribed }} subscribed &nbsp;·&nbsp; {{ stats.unsubscribed }} unsubscribed</p>
+    </div>
+    <div class="flex gap-1" style="flex-wrap:wrap;">
+      <a href="{{ url_for('contact_add') }}" class="btn btn-primary">+ Add Contact</a>
+      <a href="{{ url_for('contacts_import') }}" class="btn btn-ghost">↑ Import</a>
+      <a href="{{ url_for('contacts_export') }}" class="btn btn-ghost">↓ Export CSV</a>
+      <a href="{{ url_for('lists') }}" class="btn btn-ghost">☰ Lists</a>
+    </div>
+  </div>
+
+  <div class="stat-grid" style="margin-bottom:1.5rem;">
+    <div class="stat-tile neutral"><div class="label">Total</div><div class="value">{{ stats.total }}</div></div>
+    <div class="stat-tile success"><div class="label">Subscribed</div><div class="value">{{ stats.subscribed }}</div></div>
+    <div class="stat-tile failed"><div class="label">Unsubscribed</div><div class="value">{{ stats.unsubscribed }}</div></div>
+    <div class="stat-tile neutral"><div class="label">Lists</div><div class="value">{{ stats.lists }}</div></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card" style="padding:1rem 1.5rem;margin-bottom:1rem;">
+    <form method="GET" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:2;min-width:160px;">
+        <label class="form-label">Search</label>
+        <input type="text" name="search" value="{{ search }}" placeholder="Name or email...">
+      </div>
+      <div style="flex:1;min-width:130px;">
+        <label class="form-label">List</label>
+        <select name="list_id">
+          <option value="">All Lists</option>
+          {% for l in lists %}<option value="{{ l.id }}" {{ 'selected' if list_id==l.id }}>{{ l.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label class="form-label">Tag</label>
+        <select name="tag">
+          <option value="">All Tags</option>
+          {% for t in tags %}<option value="{{ t }}" {{ 'selected' if tag==t }}>{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label class="form-label">Status</label>
+        <select name="status">
+          <option value="">All</option>
+          <option value="subscribed" {{ 'selected' if status=='subscribed' }}>Subscribed</option>
+          <option value="unsubscribed" {{ 'selected' if status=='unsubscribed' }}>Unsubscribed</option>
+        </select>
+      </div>
+      <div class="flex gap-1">
+        <button type="submit" class="btn btn-primary" style="padding:.6rem 1rem;">Filter</button>
+        <a href="{{ url_for('contacts') }}" class="btn btn-ghost" style="padding:.6rem 1rem;">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Table -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    {% if contacts %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Email</th><th>Name</th><th>Tags</th><th>Lists</th><th>Status</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in contacts %}
+        <tr>
+          <td class="text-accent">{{ c.email }}</td>
+          <td>{{ c.first_name }} {{ c.last_name }}</td>
+          <td>
+            {% for t in (c.tags or [])[:3] %}
+              <span style="background:var(--accent-dim);color:var(--accent);padding:.1rem .35rem;border-radius:2px;font-size:.62rem;margin-right:.2rem;">{{ t }}</span>
+            {% endfor %}
+            {% if (c.tags or[])|length > 3 %}<span style="color:var(--text-dim);font-size:.62rem;">+{{ c.tags|length-3 }}</span>{% endif %}
+          </td>
+          <td style="color:var(--text-dim);">{{ (c.lists or [])|length }}</td>
+          <td><span class="badge {{ 'badge-success' if c.status=='subscribed' else 'badge-failed' }}">{{ c.status }}</span></td>
+          <td>
+            <div class="flex gap-1">
+              <a href="{{ url_for('contact_edit', email=c.email) }}" class="btn btn-ghost" style="padding:.25rem .6rem;font-size:.62rem;">Edit</a>
+              {% if c.status == 'subscribed' %}
+              <form method="POST" action="{{ url_for('contact_unsubscribe', email=c.email) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-ghost" style="padding:.25rem .6rem;font-size:.62rem;color:var(--warn);">Unsub</button>
+              </form>
+              {% else %}
+              <form method="POST" action="{{ url_for('contact_resubscribe', email=c.email) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-ghost" style="padding:.25rem .6rem;font-size:.62rem;color:var(--accent);">Resub</button>
+              </form>
+              {% endif %}
+              <form method="POST" action="{{ url_for('contact_delete', email=c.email) }}" style="display:inline"
+                    onsubmit="return confirm('Delete {{ c.email }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-ghost" style="padding:.25rem .6rem;font-size:.62rem;color:var(--danger);">Del</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <!-- Pagination -->
+    {% if pages > 1 %}
+    <div style="padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;gap:.5rem;align-items:center;">
+      {% if page > 1 %}<a href="?page={{ page-1 }}&search={{ search }}&list_id={{ list_id }}&tag={{ tag }}&status={{ status }}" class="btn btn-ghost" style="padding:.35rem .75rem;font-size:.65rem;">← Prev</a>{% endif %}
+      <span style="font-family:var(--mono);font-size:.7rem;color:var(--text-muted);">Page {{ page }} of {{ pages }} &nbsp;·&nbsp; {{ total }} contacts</span>
+      {% if page < pages %}<a href="?page={{ page+1 }}&search={{ search }}&list_id={{ list_id }}&tag={{ tag }}&status={{ status }}" class="btn btn-ghost" style="padding:.35rem .75rem;font-size:.65rem;">Next →</a>{% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div style="padding:3rem;text-align:center;color:var(--text-dim);">
+      <div style="font-size:2rem;margin-bottom:.75rem;">📭</div>
+      <div style="font-family:var(--mono);font-size:.8rem;">No contacts found.</div>
+      <div style="margin-top:1rem;">
+        <a href="{{ url_for('contact_add') }}" class="btn btn-primary" style="margin-right:.5rem;">+ Add Contact</a>
+        <a href="{{ url_for('contacts_import') }}" class="btn btn-ghost">↑ Import CSV</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Analytics — {{ run_id }}{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+    <div>
+      <div class="label">// Campaign Analytics</div>
+      <h1>{{ run_id }}</h1>
+      <p>Started {{ camp.started_at or '—' }} &nbsp;·&nbsp; {{ camp.total or 0 }} recipients</p>
+    </div>
+    <a href="{{ url_for('history') }}" class="btn btn-ghost">← History</a>
+  </div>
+
+  <!-- Key metrics -->
+  <div class="stat-grid" style="margin-bottom:1.5rem;">
+    <div class="stat-tile neutral">
+      <div class="label">Delivered</div>
+      <div class="value">{{ camp.success or 0 }}</div>
+    </div>
+    <div class="stat-tile success">
+      <div class="label">Opens</div>
+      <div class="value">{{ opens }}</div>
+    </div>
+    <div class="stat-tile success">
+      <div class="label">Open Rate</div>
+      <div class="value" style="font-size:1.4rem;">{{ open_rate }}%</div>
+    </div>
+    <div class="stat-tile neutral">
+      <div class="label">Clicks</div>
+      <div class="value">{{ clicks }}</div>
+    </div>
+    <div class="stat-tile neutral">
+      <div class="label">Click Rate</div>
+      <div class="value" style="font-size:1.4rem;">{{ click_rate }}%</div>
+    </div>
+    <div class="stat-tile failed">
+      <div class="label">Failed</div>
+      <div class="value">{{ camp.failed or 0 }}</div>
+    </div>
+  </div>
+
+  <!-- Progress bars -->
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-title">// Engagement Funnel</div>
+    {% set delivered = camp.success or 1 %}
+    <div style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;margin-bottom:.35rem;">
+        <span style="color:var(--text-muted);">Delivered</span>
+        <span class="text-accent">{{ camp.success or 0 }} / {{ total }}</span>
+      </div>
+      <div class="progress-track" style="margin:0;">
+        <div class="progress-fill" style="width:{{ ((camp.success or 0)/total*100)|round(1) }}%;"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;margin-bottom:.35rem;">
+        <span style="color:var(--text-muted);">Opened</span>
+        <span class="text-accent">{{ opens }} ({{ open_rate }}%)</span>
+      </div>
+      <div class="progress-track" style="margin:0;">
+        <div class="progress-fill" style="width:{{ open_rate }}%;background:var(--info);"></div>
+      </div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;margin-bottom:.35rem;">
+        <span style="color:var(--text-muted);">Clicked</span>
+        <span class="text-accent">{{ clicks }} ({{ click_rate }}%)</span>
+      </div>
+      <div class="progress-track" style="margin:0;">
+        <div class="progress-fill" style="width:{{ click_rate }}%;background:var(--warn);"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event feed -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:1rem 1.5rem;border-bottom:1px solid var(--border);">
+      <span class="card-title" style="margin:0;padding:0;border:none;">// Recent Activity (last 50 events)</span>
+    </div>
+    {% if recent_events %}
+    <table class="data-table">
+      <thead>
+        <tr><th>Time</th><th>Event</th><th>Email</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for e in recent_events %}
+        <tr>
+          <td style="color:var(--text-dim);white-space:nowrap;">
+            {{ e.at.strftime('%H:%M:%S') if e.at else '—' }}
+          </td>
+          <td>
+            {% if e.type == 'open' %}
+              <span class="badge badge-success">📬 open</span>
+            {% else %}
+              <span class="badge badge-dry_run">🔗 click</span>
+            {% endif %}
+          </td>
+          <td class="text-accent">{{ e.email or '—' }}</td>
+          <td style="color:var(--text-dim);font-size:.65rem;">
+            {% if e.type == 'click' %}{{ e.url[:60] if e.url else '' }}{% endif %}
+            {% if e.type == 'open' and e.ua %}{{ e.ua[:50] }}{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="padding:3rem;text-align:center;color:var(--text-dim);">
+      <div style="font-size:2rem;margin-bottom:.75rem;">📊</div>
+      <div style="font-family:var(--mono);font-size:.8rem;">
+        No events recorded yet.<br>
+        <span style="font-size:.7rem;margin-top:.5rem;display:block;">
+          Open and click tracking requires the tracking pixel and link wrapping to be added to your emails.
+        </span>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-top:1.5rem;background:rgba(68,136,255,.05);border-color:rgba(68,136,255,.2);">
+    <div class="card-title" style="color:var(--info);">// How to Enable Tracking</div>
+    <p style="color:var(--text-muted);font-size:.82rem;line-height:1.8;">
+      Add this invisible pixel to the bottom of your email HTML to track opens:<br>
+      <code style="background:var(--surface2);padding:.2rem .5rem;border-radius:2px;font-size:.75rem;color:var(--accent);">
+        &lt;img src="http://yourserver/track/open/{{ run_id }}?e=&#123;&#123;email&#125;&#125;" width="1" height="1"&gt;
+      </code>
+    </p>
+  </div>
+</div>
+{% endblock %}

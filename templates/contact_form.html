@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div class="label">// Contacts → {{ title }}</div>
+    <h1>{{ title }}</h1>
+  </div>
+  <div class="card">
+    <div class="card-title">// Contact Details</div>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="two-col">
+        <div class="form-group">
+          <label class="form-label">Email Address *</label>
+          <input type="email" name="email" value="{{ contact.email if contact else '' }}"
+                 {{ 'readonly style=opacity:.6' if contact else 'required' }} placeholder="email@example.com">
+          {% if contact %}<p class="form-hint">Email cannot be changed.</p>{% endif %}
+        </div>
+        <div></div>
+        <div class="form-group">
+          <label class="form-label">First Name</label>
+          <input type="text" name="first_name" value="{{ contact.first_name if contact else '' }}" placeholder="John">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Last Name</label>
+          <input type="text" name="last_name" value="{{ contact.last_name if contact else '' }}" placeholder="Smith">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Tags</label>
+        <input type="text" name="tags" value="{{ (contact.tags or []) | join(', ') if contact else '' }}"
+               placeholder="vip, customer, newsletter — comma separated">
+        <p class="form-hint">Comma-separated. Tags are used to segment contacts for campaigns.</p>
+      </div>
+
+      {% if lists %}
+      <div class="form-group">
+        <label class="form-label">Add to Lists</label>
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.25rem;">
+          {% for l in lists %}
+          <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;
+                        background:var(--surface2);border:1px solid var(--border-bright);
+                        padding:.4rem .75rem;border-radius:2px;font-family:var(--mono);font-size:.72rem;">
+            <input type="checkbox" name="list_ids" value="{{ l.id }}"
+                   {{ 'checked' if contact and l.id in (contact.lists or []) }}>
+            {{ l.name }}
+            <span style="color:var(--text-dim);font-size:.6rem;">({{ l.subscribed }})</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="flex gap-2 mt-2">
+        <button type="submit" class="btn btn-primary">{{ '💾 Save Changes' if contact else '+ Add Contact' }}</button>
+        <a href="{{ url_for('contacts') }}" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  {% if contact %}
+  <div class="card">
+    <div class="card-title">// Danger Zone</div>
+    <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+      {% if contact.status == 'subscribed' %}
+      <form method="POST" action="{{ url_for('contact_unsubscribe', email=contact.email) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn" style="background:var(--warn-dim);color:var(--warn);border:1px solid var(--warn);">Unsubscribe Contact</button>
+      </form>
+      {% else %}
+      <form method="POST" action="{{ url_for('contact_resubscribe', email=contact.email) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-primary">Resubscribe Contact</button>
+      </form>
+      {% endif %}
+      <form method="POST" action="{{ url_for('contact_delete', email=contact.email) }}"
+            onsubmit="return confirm('Permanently delete {{ contact.email }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn" style="background:var(--danger-dim);color:var(--danger);border:1px solid var(--danger);">Delete Contact</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

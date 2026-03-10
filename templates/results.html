@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Results{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div class="label">// Campaign Running</div>
+    <h1 id="page-title">Sending...</h1>
+    <p id="page-sub">Campaign ID: <code class="text-mono text-accent">{{ run_id }}</code></p>
+  </div>
+
+  <div class="stat-grid" style="margin-bottom:1.5rem;">
+    <div class="stat-tile neutral">
+      <div class="label">Total</div>
+      <div class="value" id="stat-total">—</div>
+    </div>
+    <div class="stat-tile success">
+      <div class="label">Sent</div>
+      <div class="value text-accent" id="stat-success">0</div>
+    </div>
+    <div class="stat-tile failed">
+      <div class="label">Failed</div>
+      <div class="value" id="stat-failed">0</div>
+    </div>
+    <div class="stat-tile warn">
+      <div class="label">Invalid</div>
+      <div class="value" id="stat-invalid">0</div>
+    </div>
+    <div class="stat-tile neutral">
+      <div class="label">Progress</div>
+      <div class="value" id="stat-pct">0%</div>
+    </div>
+  </div>
+
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-bar" style="width:0%"></div>
+  </div>
+
+  <div class="card" id="actions-card" style="display:none">
+    <div class="card-title">// Download</div>
+    <div class="flex gap-2">
+      <a href="/download/report/{{ run_id }}" class="btn btn-primary">↓ CSV Report</a>
+      <a href="/download/log/{{ run_id }}" class="btn btn-ghost">↓ Log File</a>
+      <a href="{{ url_for('compose') }}" class="btn btn-ghost">New Campaign</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">// Live Results <span id="live-indicator" style="color:var(--accent);font-size:0.6rem;">● LIVE</span></div>
+    <div style="overflow-x:auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Attempts</th>
+            <th>Error</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="results-body">
+          <tr><td colspan="6" style="color:var(--text-dim);text-align:center;padding:2rem;">Waiting for results...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const runId = "{{ run_id }}";
+  let lastCount = 0;
+  let done = false;
+
+  function badge(status) {
+    return `<span class="badge badge-${status}">${status}</span>`;
+  }
+
+  function fmt(ts) {
+    if (!ts) return '—';
+    return ts.split('T')[1]?.split('.')[0] || ts;
+  }
+
+  function poll() {
+    fetch(`/api/status/${runId}`)
+      .then(r => r.json())
+      .then(data => {
+        const total = data.total || 0;
+        const success = data.success || 0;
+        const failed = data.failed || 0;
+        const invalid = data.invalid || 0;
+        const processed = data.results?.length || 0;
+        const pct = total > 0 ? Math.round(processed / total * 100) : 0;
+
+        document.getElementById('stat-total').textContent = total;
+        document.getElementById('stat-success').textContent = success;
+        document.getElementById('stat-failed').textContent = failed;
+        document.getElementById('stat-invalid').textContent = invalid;
+        document.getElementById('stat-pct').textContent = pct + '%';
+        document.getElementById('progress-bar').style.width = pct + '%';
+
+        // Append new results
+        const results = data.results || [];
+        if (results.length > lastCount) {
+          const tbody = document.getElementById('results-body');
+          if (lastCount === 0) tbody.innerHTML = '';
+          for (let i = lastCount; i < results.length; i++) {
+            const r = results[i];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${r.email}</td>
+              <td>${r.name?.trim() || '—'}</td>
+              <td>${badge(r.status)}</td>
+              <td>${r.attempts}</td>
+              <td style="color:var(--danger);max-width:200px;overflow:hidden;text-overflow:ellipsis;">${r.error || ''}</td>
+              <td>${fmt(r.timestamp)}</td>
+            `;
+            tbody.appendChild(tr);
+          }
+          lastCount = results.length;
+        }
+
+        if (data.status === 'complete' && !done) {
+          done = true;
+          document.getElementById('page-title').textContent = 'Campaign Complete';
+          document.getElementById('page-sub').textContent = `Finished at ${fmt(data.finished_at)} — ${success} sent, ${failed} failed`;
+          document.getElementById('live-indicator').style.display = 'none';
+          document.getElementById('actions-card').style.display = '';
+          document.getElementById('progress-bar').style.width = '100%';
+        } else if (!done) {
+          setTimeout(poll, 1200);
+        }
+      })
+      .catch(() => { if (!done) setTimeout(poll, 3000); });
+  }
+
+  setTimeout(poll, 500);
+</script>
+{% endblock %}

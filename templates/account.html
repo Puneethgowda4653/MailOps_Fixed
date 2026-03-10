@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}My Account{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div class="label">// My Account</div>
+    <h1>Account Settings</h1>
+    <p>Manage your profile, password, and account data.</p>
+  </div>
+
+  <!-- Profile -->
+  <div class="card">
+    <div class="card-title">// Profile</div>
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;">
+      <div style="width:52px;height:52px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;color:#000;font-family:var(--mono);">
+        {{ (user.username or user.email or 'U')[0].upper() }}
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:1rem;color:var(--text);">{{ user.username or 'User' }}</div>
+        <div style="font-size:.75rem;color:var(--text-dim);font-family:var(--mono);">{{ user.email }}</div>
+        <div style="font-size:.65rem;color:var(--text-dim);margin-top:.2rem;">
+          {% if user.auth_provider == 'google' %}🔵 Google account
+          {% elif user.auth_provider == 'google+password' %}🔵 Google + password
+          {% else %}🔑 Email & password
+          {% endif %}
+          &nbsp;·&nbsp; Member since {{ user.created_at.strftime('%b %Y') if user.created_at else '—' }}
+        </div>
+      </div>
+    </div>
+
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_profile">
+      <div class="two-col">
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" name="username" value="{{ user.username or '' }}" required minlength="2">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" name="email" value="{{ user.email or '' }}" required>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Save Profile</button>
+    </form>
+  </div>
+
+  <!-- Change Password (only for password accounts) -->
+  {% if user.auth_provider in ('password', 'google+password') %}
+  <div class="card">
+    <div class="card-title">// Change Password</div>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="change_password">
+      <div class="form-group">
+        <label class="form-label">Current Password</label>
+        <input type="password" name="current_password" required placeholder="Enter your current password">
+      </div>
+      <div class="two-col">
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input type="password" name="new_password" required minlength="8" placeholder="Min 8 characters">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm New Password</label>
+          <input type="password" name="confirm_password" required placeholder="Repeat new password">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Update Password</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Danger Zone -->
+  <div class="card" style="border-color:var(--danger);background:rgba(220,38,38,.04);">
+    <div class="card-title" style="color:var(--danger);">// Danger Zone</div>
+    <p style="color:var(--text-muted);font-size:.84rem;margin-bottom:1rem;">
+      Permanently delete your account and <strong>all your data</strong> — contacts, lists, templates, campaigns, and SMTP settings. This cannot be undone.
+    </p>
+    <form method="POST" onsubmit="return confirm('This will permanently delete your account and ALL data. Are you absolutely sure?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="delete_account">
+      <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;flex:1;min-width:180px;">
+          <label class="form-label" style="color:var(--danger);">Type DELETE to confirm</label>
+          <input type="text" name="confirm_delete" placeholder="DELETE" pattern="DELETE" required
+                 style="border-color:var(--danger);">
+        </div>
+        <button type="submit" class="btn" style="background:var(--danger);color:#fff;padding:.65rem 1.2rem;">
+          Delete My Account
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

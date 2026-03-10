@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div class="label"> Welcome, {{ username }}</div>
+    <h1>Dashboard</h1>
+    <p>Send personalized bulk email campaigns at zero cost.</p>
+  </div>
+
+  <!-- Status row -->
+  <div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;padding:1rem 1.25rem;border-radius:2px;
+      background:{{ 'rgba(0,229,160,.07)' if db_ok else 'rgba(255,68,68,.07)' }};
+      border:1px solid {{ 'rgba(0,229,160,.25)' if db_ok else 'rgba(255,68,68,.25)' }};">
+      <div style="font-family:var(--mono);font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;
+        color:{{ 'var(--accent)' if db_ok else 'var(--danger)' }};margin-bottom:.3rem;">
+        {{ '✓' if db_ok else '✗' }} MongoDB</div>
+      <div style="font-size:.78rem;color:var(--text-muted);">{{ db_msg }}</div>
+    </div>
+    <div style="flex:1;min-width:200px;padding:1rem 1.25rem;border-radius:2px;
+      background:{{ 'rgba(0,229,160,.07)' if smtp_ok else 'rgba(255,170,0,.07)' }};
+      border:1px solid {{ 'rgba(0,229,160,.25)' if smtp_ok else 'rgba(255,170,0,.35)' }};">
+      <div style="font-family:var(--mono);font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;
+        color:{{ 'var(--accent)' if smtp_ok else 'var(--warn)' }};margin-bottom:.3rem;">
+        {{ '✓' if smtp_ok else '⚠' }} SMTP</div>
+      {% if smtp_ok %}
+        <div style="font-size:.78rem;color:var(--text-muted);">{{ cfg.user }} via {{ cfg.host }}</div>
+      {% else %}
+        <div style="font-size:.78rem;">
+          <a href="{{ url_for('smtp_settings') }}" style="color:var(--warn);">Configure SMTP →</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Contact stats -->
+  <div class="stat-grid" style="margin-bottom:1.5rem;">
+    <div class="stat-tile neutral"><div class="label">Total Contacts</div><div class="value">{{ contact_stats.total }}</div></div>
+    <div class="stat-tile success"><div class="label">Subscribed</div><div class="value">{{ contact_stats.subscribed }}</div></div>
+    <div class="stat-tile failed"><div class="label">Unsubscribed</div><div class="value">{{ contact_stats.unsubscribed }}</div></div>
+    <div class="stat-tile neutral"><div class="label">Lists</div><div class="value">{{ contact_stats.lists }}</div></div>
+  </div>
+
+  {% if not smtp_ok %}
+  <div style="background:rgba(255,170,0,.07);border:1px solid var(--warn);border-radius:2px;
+              padding:1.25rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;
+              justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+    <div>
+      <div style="font-family:var(--mono);font-size:.75rem;color:var(--warn);font-weight:600;margin-bottom:.25rem;">⚠ SMTP Not Configured</div>
+      <div style="font-size:.82rem;color:var(--text-muted);">Pick a mail provider and enter credentials before sending.</div>
+    </div>
+    <a href="{{ url_for('smtp_settings') }}" class="btn btn-primary">Configure SMTP →</a>
+  </div>
+  {% endif %}
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">// Quick Actions</div>
+      <div style="display:flex;flex-direction:column;gap:.75rem;">
+        <a href="{{ url_for('compose') }}" class="btn btn-primary" style="justify-content:center;"
+           {% if not smtp_ok %}style="opacity:.4;pointer-events:none;"{% endif %}>▶ New Campaign</a>
+        <a href="{{ url_for('contacts') }}" class="btn btn-ghost" style="justify-content:center;">👥 Manage Contacts</a>
+        <a href="{{ url_for('contacts_import') }}" class="btn btn-ghost" style="justify-content:center;">↑ Import CSV</a>
+        <a href="{{ url_for('lists') }}" class="btn btn-ghost" style="justify-content:center;">☰ Manage Lists</a>
+        <a href="{{ url_for('templates') }}" class="btn btn-ghost" style="justify-content:center;">📄 Email Templates</a>
+        <a href="{{ url_for('history') }}" class="btn btn-ghost" style="justify-content:center;">📋 Campaign History</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

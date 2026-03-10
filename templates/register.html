@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Create Account — MailOps{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:center;align-items:center;min-height:72vh;">
+  <div style="width:100%;max-width:420px;">
+    <div class="card">
+      <div style="text-align:center;margin-bottom:1.8rem;">
+        <div style="font-size:2rem;font-weight:900;color:var(--accent);font-family:var(--mono);">MailOps</div>
+        <div style="font-size:.75rem;color:var(--text-dim);font-family:var(--mono);margin-top:.25rem;">Create your free account</div>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }}" style="margin-bottom:1rem;">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      {% if google_enabled %}
+      <a href="{{ url_for('google_login') }}" class="btn" style="width:100%;background:#fff;color:#333;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;gap:.6rem;margin-bottom:1rem;font-family:var(--mono);font-size:.72rem;">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+        Sign up with Google
+      </a>
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;">
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+        <span style="font-family:var(--mono);font-size:.65rem;color:var(--text-dim);">or register with email</span>
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+      {% endif %}
+
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" name="username" required minlength="2" placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" name="email" required placeholder="you@example.com">
+        </div>
+        <div style="position:relative;">
+  <input type="password" name="password" id="reg-pw" required placeholder="Password (min 8 chars)" style="width:100%;padding-right:2.5rem;box-sizing:border-box;">
+  <span onclick="var f=document.getElementById('reg-pw');f.type=f.type==='password'?'text':'password';this.textContent=f.type==='password'?'👁':'🙈'"
+    style="position:absolute;right:.7rem;top:50%;transform:translateY(-50%);cursor:pointer;font-size:.9rem;user-select:none;">👁</span>
+</div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input type="password" name="confirm" required placeholder="Repeat password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.5rem;">Create Account →</button>
+      </form>
+
+      <p style="text-align:center;margin-top:1.2rem;font-family:var(--mono);font-size:.73rem;color:var(--text-dim);">
+        Already have an account? <a href="{{ url_for('login') }}" style="color:var(--accent);">Sign in →</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

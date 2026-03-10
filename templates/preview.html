@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Preview Campaign{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div class="label">// Step 2 of 2</div>
+    <h1>Campaign Preview</h1>
+    <p>Review your campaign before sending.</p>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="stat-grid" style="margin-bottom:1.5rem;">
+    <div class="stat-tile neutral">
+      <div class="label">Recipients</div>
+      <div class="value">{{ campaign.valid_count }}</div>
+    </div>
+    <div class="stat-tile {% if campaign.invalid_count > 0 %}warn{% else %}success{% endif %}">
+      <div class="label">Invalid / Skipped</div>
+      <div class="value">{{ campaign.invalid_count }}</div>
+    </div>
+    <div class="stat-tile neutral">
+      <div class="label">Mode</div>
+      <div class="value" style="font-size:1rem;padding-top:.4rem;">{{ campaign.mode|capitalize }}</div>
+    </div>
+    <div class="stat-tile {% if campaign.dry_run %}warn{% else %}neutral{% endif %}">
+      <div class="label">Dry Run</div>
+      <div class="value" style="font-size:1rem;padding-top:.4rem;">{{ 'YES' if campaign.dry_run else 'No' }}</div>
+    </div>
+  </div>
+
+  {% if campaign.invalid_emails %}
+  <div class="card" style="border-color:var(--warn);background:var(--warn-dim);">
+    <div class="card-title" style="color:var(--warn);">// Invalid Emails (skipped)</div>
+    {% for e in campaign.invalid_emails %}
+    <span style="font-family:var(--mono);font-size:.72rem;color:var(--warn);margin-right:1rem;">{{ e }}</span>
+    {% endfor %}
+    {% if campaign.invalid_count > campaign.invalid_emails|length %}
+    <span style="font-size:.7rem;color:var(--text-dim);">...and {{ campaign.invalid_count - campaign.invalid_emails|length }} more</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Email preview -->
+  <div class="card">
+    <div class="card-title">// Email Content</div>
+    <div style="margin-bottom:1rem;">
+      <span style="font-family:var(--mono);font-size:.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;">From</span>
+      <span style="font-family:var(--mono);font-size:.78rem;color:var(--text);margin-left:.75rem;">{{ smtp.sender_name }} &lt;{{ smtp.user }}&gt;</span>
+    </div>
+    <div style="margin-bottom:1.5rem;">
+      <span style="font-family:var(--mono);font-size:.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;">Subject</span>
+      <span style="font-family:var(--mono);font-size:.78rem;color:var(--accent);margin-left:.75rem;">{{ campaign.subject }}</span>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:2px;background:#fff;padding:1.5rem;color:#111;font-size:.85rem;line-height:1.6;max-height:320px;overflow-y:auto;">
+      {{ campaign.body|safe }}
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="card">
+    <div class="card-title">// Send Options</div>
+
+    <!-- Send Now -->
+    <form method="POST" action="{{ url_for('send') }}" id="send-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary" style="margin-right:.75rem;">
+        ⚡ Send Now ({{ campaign.valid_count }} recipients)
+      </button>
+      <a href="{{ url_for('compose') }}" class="btn btn-ghost">← Edit</a>
+    </form>
+
+    <!-- Divider -->
+    <div style="display:flex;align-items:center;gap:.75rem;margin:1.5rem 0;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      <span style="font-family:var(--mono);font-size:.65rem;color:var(--text-dim);">or schedule for later</span>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>
+
+    <!-- Schedule Form -->
+    <form method="POST" action="{{ url_for('schedule') }}" id="schedule-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <!-- Toggle: datetime vs delay -->
+      <div class="seg-control" style="margin-bottom:1.5rem;max-width:400px;">
+        <input type="radio" name="schedule_type" id="stype-dt" value="datetime" checked>
+        <label for="stype-dt">Specific Date & Time</label>
+        <input type="radio" name="schedule_type" id="stype-delay" value="delay">
+        <label for="stype-delay">Send After Delay</label>
+      </div>
+
+      <!-- Specific datetime panel -->
+      <div id="panel-datetime">
+        <div class="form-group" style="max-width:340px;">
+          <label class="form-label">Schedule Date & Time (your local time)</label>
+          <input type="datetime-local" name="schedule_datetime" id="schedule-dt"
+                 min="{{ now_str }}" style="font-family:var(--mono);">
+          <p class="form-hint">Enter time in IST (India Standard Time). The system will convert automatically.</p>
+        </div>
+      </div>
+
+      <!-- Delay panel -->
+      <div id="panel-delay" style="display:none;">
+        <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+          <div class="form-group" style="margin:0;width:140px;">
+            <label class="form-label">Send After</label>
+            <input type="number" name="delay_value" value="2" min="1" max="999" step="1">
+          </div>
+          <div class="form-group" style="margin:0;width:160px;">
+            <label class="form-label">Unit</label>
+            <select name="delay_unit">
+              <option value="minutes">Minutes</option>
+              <option value="hours" selected>Hours</option>
+              <option value="days">Days</option>
+            </select>
+          </div>
+        </div>
+        <p class="form-hint" style="margin-top:.5rem;">e.g. "Send in 2 hours" = sends at {{ campaign.valid_count }} recipients in ~2 hrs from now.</p>
+      </div>
+
+      <button type="submit" class="btn" style="background:var(--info);color:#fff;margin-top:1.25rem;">
+        🕐 Schedule Campaign
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+// Set default datetime to 1 hour from now
+const dt = new Date(Date.now() + 60*60*1000);
+const pad = n => String(n).padStart(2,'0');
+document.getElementById('schedule-dt').value =
+  `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+
+// Toggle panels
+document.querySelectorAll('[name=schedule_type]').forEach(r => {
+  r.addEventListener('change', () => {
+    document.getElementById('panel-datetime').style.display = r.value==='datetime' ? '' : 'none';
+    document.getElementById('panel-delay').style.display    = r.value==='delay'    ? '' : 'none';
+  });
+});
+</script>
+{% endblock %}

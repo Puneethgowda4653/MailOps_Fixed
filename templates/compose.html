@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}New Campaign{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div class="label">// Step 1 of 2</div>
+    <h1>New Campaign</h1>
+    <p>Compose your email and choose recipients.</p>
+  </div>
+
+  <form method="POST" enctype="multipart/form-data" id="compose-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- Template loader -->
+    {% if templates %}
+    <div class="card" style="border-color:rgba(68,136,255,.3);background:rgba(68,136,255,.04);">
+      <div class="card-title" style="color:var(--info);">// Load from Template (optional)</div>
+      <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <label class="form-label">Select Template</label>
+          <select id="template-picker">
+            <option value="">— Choose a template —</option>
+            {% for t in templates %}
+            <option value="{{ t.id }}" data-subject="{{ t.subject or '' }}">{{ t.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="button" onclick="loadTemplate()" class="btn" style="background:var(--info);color:#000;padding:.6rem 1.2rem;">
+          ↙ Load into Compose
+        </button>
+        <a href="{{ url_for('templates') }}" class="btn btn-ghost" style="padding:.6rem 1rem;">
+          Manage Templates →
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Recipients -->
+    <div class="card">
+      <div class="card-title">// Recipients</div>
+      <div class="seg-control" style="margin-bottom:1.5rem;">
+        <input type="radio" name="recipient_source" id="src-file" value="file" checked>
+        <label for="src-file">Upload CSV</label>
+        <input type="radio" name="recipient_source" id="src-list" value="list">
+        <label for="src-list">From List</label>
+        <input type="radio" name="recipient_source" id="src-tag" value="tag">
+        <label for="src-tag">By Tag</label>
+      </div>
+      <div id="panel-file">
+        <div class="form-group">
+          <label class="form-label">Recipient File (CSV / Excel)</label>
+          <div class="file-input-wrap">
+            <input type="file" name="recipient_file" accept=".csv,.xlsx,.xls" id="rec-file">
+            <div class="icon">📂</div>
+            <div class="text" id="rec-file-label">Click to select or drag and drop</div>
+            <div class="sub">Must have an <span style="color:var(--accent)">email</span> column · Max 16MB</div>
+          </div>
+        </div>
+      </div>
+      <div id="panel-list" style="display:none;">
+        {% if lists %}
+        <div class="form-group">
+          <label class="form-label">Select Lists</label>
+          <div style="display:flex;flex-wrap:wrap;gap:.5rem;">
+            {% for l in lists %}
+            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;
+                          background:var(--surface2);border:1px solid var(--border-bright);
+                          padding:.5rem .9rem;border-radius:2px;font-family:var(--mono);font-size:.72rem;">
+              <input type="checkbox" name="list_ids" value="{{ l.id }}">
+              {{ l.name }} <span style="color:var(--accent);margin-left:.25rem;">{{ l.subscribed }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        <p style="color:var(--text-dim);font-family:var(--mono);font-size:.78rem;">
+          No lists yet. <a href="{{ url_for('lists') }}" style="color:var(--accent);">Create a list →</a>
+        </p>
+        {% endif %}
+      </div>
+      <div id="panel-tag" style="display:none;">
+        {% if tags %}
+        <div class="form-group">
+          <label class="form-label">Select Tag</label>
+          <select name="tag_filter">
+            <option value="">— Choose a tag —</option>
+            {% for t in tags %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+          </select>
+          <p class="form-hint">All subscribed contacts with this tag will receive the email.</p>
+        </div>
+        {% else %}
+        <p style="color:var(--text-dim);font-family:var(--mono);font-size:.78rem;">
+          No tags yet. <a href="{{ url_for('contact_add') }}" style="color:var(--accent);">Add contacts with tags →</a>
+        </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Email content -->
+    <div class="card">
+      <div class="card-title">// Email Content</div>
+      <div class="form-group">
+        <label class="form-label">Subject Line *</label>
+        <input type="text" name="subject" id="subject-field"
+               value="{{ form.get('subject','') }}" required
+               placeholder="e.g. Hi {{first_name}}, here's your update">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email Body (HTML supported) *</label>
+
+        <!-- Simple formatting toolbar -->
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;">
+          <button type="button" onclick="wrapTag('b')" title="Bold"
+            style="padding:.25rem .6rem;font-family:var(--mono);font-size:.7rem;background:var(--surface2);border:1px solid var(--border-bright);color:var(--text);border-radius:3px;cursor:pointer;"><b>B</b></button>
+          <button type="button" onclick="wrapTag('i')" title="Italic"
+            style="padding:.25rem .6rem;font-family:var(--mono);font-size:.7rem;background:var(--surface2);border:1px solid var(--border-bright);color:var(--text);border-radius:3px;cursor:pointer;"><i>I</i></button>
+          <button type="button" onclick="wrapTag('u')" title="Underline"
+            style="padding:.25rem .6rem;font-family:var(--mono);font-size:.7rem;background:var(--surface2);border:1px solid var(--border-bright);color:var(--text);border-radius:3px;cursor:pointer;"><u>U</u></button>
+          <button type="button" onclick="insertHtml('<h2>Heading</h2>')" title="Heading"
+            style="padding:.25rem .6rem;font-family:var(--mono);font-size:.7rem;background:var(--surface2);border:1px solid var(--border-bright);color:var(--text);border-radius:3px;cursor:pointer;">H2</button>
+          <button type="button" onclick="insertHtml('<ul>\n<li>Item 1</li>\n<li>Item 2</li>\n</ul>')" title="List"
+            style="padding:.25rem .6rem;font-family:var(--mono);font-size:.7rem;background:var(--surface2);border:1px solid var(--border-bright);color:var(--text);border-radius:3px;cursor:pointer;">• List</button>
+          <button type="button" onclick="insertHtml('<a href=\'https://\'>Link text</a>')" title="Link"
+            style="padding:.25rem .6rem;font-family:var(--mono);font-size:.7rem;background:var(--surface2);border:1px solid var(--border-bright);color:var(--text);border-radius:3px;cursor:pointer;">🔗 Link</button>
+          <button type="button" onclick="insertHtml('<hr>')" title="Divider"
+            style="padding:.25rem .6rem;font-family:var(--mono);font-size:.7rem;background:var(--surface2);border:1px solid var(--border-bright);color:var(--text);border-radius:3px;cursor:pointer;">── Line</button>
+          <button type="button" onclick="insertHtml('<p style=\'text-align:center;\'>Centered text</p>')" title="Center"
+            style="padding:.25rem .6rem;font-family:var(--mono);font-size:.7rem;background:var(--surface2);border:1px solid var(--border-bright);color:var(--text);border-radius:3px;cursor:pointer;">⟺ Center</button>
+        </div>
+
+        <textarea name="body" id="body-field" required
+                  placeholder="Write your email here. Press Enter for new lines — formatting is preserved automatically.&#10;&#10;Or use HTML tags like <b>bold</b>, <i>italic</i>, <a href='https://'>link</a>&#10;&#10;Use merge tags like {{first_name}} for personalization.">{{ form.get('body','') }}</textarea>
+        <p class="form-hint">
+          ✓ Line breaks are preserved automatically &nbsp;|&nbsp;
+          ✓ HTML is supported &nbsp;|&nbsp;
+          Merge tags:
+          {% for t in ['first_name','last_name','email'] %}
+          <span class="var-chip" onclick="insertTag('{{'+t+'}}')">&#123;&#123;{{ t }}&#125;&#125;</span>
+          {% endfor %}
+        </p>
+      </div>
+      <!-- Save as template button -->
+      <div style="margin-top:-.5rem;margin-bottom:1rem;">
+        <button type="button" onclick="showSaveTemplate()"
+                class="btn btn-ghost" style="font-size:.65rem;padding:.35rem .8rem;">
+          💾 Save current body as template
+        </button>
+      </div>
+      <!-- Save-as-template inline form -->
+      <div id="save-template-form" style="display:none;background:var(--surface2);
+           border:1px solid var(--border-bright);padding:1rem;border-radius:2px;margin-bottom:1rem;">
+        <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:160px;">
+            <label class="form-label">Template Name</label>
+            <input type="text" id="save-tpl-name" placeholder="e.g. Welcome Email">
+          </div>
+          <button type="button" onclick="doSaveTemplate()" class="btn btn-primary" style="padding:.6rem 1rem;">Save</button>
+          <button type="button" onclick="hideSaveTemplate()" class="btn btn-ghost" style="padding:.6rem .75rem;">✕</button>
+        </div>
+        <div id="save-tpl-msg" style="font-family:var(--mono);font-size:.7rem;margin-top:.5rem;"></div>
+      </div>
+    </div>
+
+    <!-- Attachments -->
+    <div class="card">
+      <div class="card-title">// Attachments (optional)</div>
+
+      <!-- Attachment input wrapped in label — most reliable cross-browser method -->
+      <label for="attach-input"
+             style="display:block;border:1px dashed var(--border-bright);border-radius:4px;
+                    padding:1.5rem;text-align:center;cursor:pointer;
+                    transition:border-color .2s,background .2s;"
+             onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--accent-glow)'"
+             onmouseout="this.style.borderColor='var(--border-bright)';this.style.background=''">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">📎</div>
+        <div id="attach-label" style="font-family:var(--mono);font-size:.75rem;color:var(--text-muted);">
+          Click to attach files
+        </div>
+        <div style="font-size:.65rem;color:var(--text-dim);margin-top:.2rem;">
+          PDF, Word, Excel, images, ZIP · Max 16MB total
+        </div>
+      </label>
+      <input type="file" name="attachments" id="attach-input" multiple
+             accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.txt,.zip"
+             style="display:none;" onchange="showAttachments(this)">
+
+      <!-- File list shown after selection -->
+      <div id="attach-list" style="display:none;margin-top:.75rem;"></div>
+    </div>
+
+    <!-- Send settings -->
+    <div class="card">
+      <div class="card-title">// Send Settings</div>
+      <div class="two-col">
+        <div class="form-group">
+          <label class="form-label">Sending Mode</label>
+          <div class="seg-control">
+            <input type="radio" name="mode" id="mode-seq" value="sequential" checked>
+            <label for="mode-seq">Sequential</label>
+            <input type="radio" name="mode" id="mode-par" value="parallel">
+            <label for="mode-par">Parallel</label>
+          </div>
+          <p class="form-hint">Sequential is safer for Gmail. Parallel is faster for bulk.</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Delay Between Sends (seconds)</label>
+          <input type="number" name="delay" value="0.5" min="0" max="10" step="0.1">
+          <p class="form-hint">Recommended: 0.5s to avoid Gmail rate limits.</p>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="toggle-wrap">
+          <input type="checkbox" name="dry_run" id="dry-run">
+          <div class="toggle"></div>
+          <span class="toggle-label">Dry run — preview without actually sending</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn btn-primary">Preview Campaign →</button>
+      <a href="{{ url_for('index') }}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+// Toggle recipient panels
+document.querySelectorAll('[name=recipient_source]').forEach(r => {
+  r.addEventListener('change', () => {
+    ['file','list','tag'].forEach(p =>
+      document.getElementById('panel-'+p).style.display = r.value===p ? '' : 'none');
+  });
+});
+
+// Show filename when selected
+document.getElementById('rec-file').addEventListener('change', function() {
+  document.getElementById('rec-file-label').textContent =
+    this.files[0] ? this.files[0].name : 'Click to select or drag and drop';
+});
+
+// Show selected attachment filenames
+function showAttachments(input) {
+  const list  = document.getElementById('attach-list');
+  const label = document.getElementById('attach-label');
+  if (!input.files || input.files.length === 0) {
+    list.style.display = 'none';
+    label.textContent  = 'Click to attach files';
+    return;
+  }
+  const files = Array.from(input.files);
+  label.textContent = files.length + ' file' + (files.length > 1 ? 's' : '') + ' selected';
+  list.style.display = '';
+  list.innerHTML = files.map(f => {
+    const kb = (f.size / 1024).toFixed(1);
+    return `<div style="display:flex;align-items:center;gap:.5rem;font-family:var(--mono);font-size:.72rem;
+                        color:var(--text-muted);padding:.35rem .5rem;background:var(--surface2);
+                        border-radius:4px;margin-bottom:.3rem;">
+              <span>📄</span>
+              <span style="flex:1;">${f.name}</span>
+              <span style="color:var(--text-dim);">${kb} KB</span>
+            </div>`;
+  }).join('');
+}
+
+// Insert merge tag
+function insertTag(tag) {
+  const ta = document.getElementById('body-field');
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.value = ta.value.slice(0,s) + tag + ta.value.slice(e);
+  ta.focus(); ta.selectionStart = ta.selectionEnd = s + tag.length;
+}
+
+// Wrap selected text in HTML tag
+function wrapTag(tag) {
+  const ta = document.getElementById('body-field');
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const selected = ta.value.slice(s, e) || 'text';
+  const wrapped = `<${tag}>${selected}</${tag}>`;
+  ta.value = ta.value.slice(0,s) + wrapped + ta.value.slice(e);
+  ta.focus(); ta.selectionStart = s; ta.selectionEnd = s + wrapped.length;
+}
+
+// Insert raw HTML at cursor
+function insertHtml(html) {
+  const ta = document.getElementById('body-field');
+  const s = ta.selectionStart;
+  ta.value = ta.value.slice(0,s) + html + ta.value.slice(s);
+  ta.focus(); ta.selectionStart = ta.selectionEnd = s + html.length;
+}
+
+// Load template into compose fields
+async function loadTemplate() {
+  const sel = document.getElementById('template-picker');
+  const id  = sel.value;
+  if (!id) { alert('Select a template first.'); return; }
+  const r = await fetch(`/api/templates/${id}`);
+  const t = await r.json();
+  if (t.error) { alert('Template not found.'); return; }
+  document.getElementById('subject-field').value = t.subject || '';
+  document.getElementById('body-field').value    = t.html_body || '';
+  // Scroll down to body
+  document.getElementById('body-field').scrollIntoView({behavior:'smooth'});
+  // Flash confirmation
+  const btn = document.querySelector('button[onclick="loadTemplate()"]');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Loaded!';
+  btn.style.background = 'var(--accent)';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+}
+
+// Save template from compose
+function showSaveTemplate() { document.getElementById('save-template-form').style.display = ''; }
+function hideSaveTemplate() { document.getElementById('save-template-form').style.display = 'none'; }
+
+async function doSaveTemplate() {
+  const name    = document.getElementById('save-tpl-name').value.trim();
+  const subject = document.getElementById('subject-field').value;
+  const body    = document.getElementById('body-field').value;
+  const msg     = document.getElementById('save-tpl-msg');
+  if (!name) { msg.textContent = 'Enter a template name.'; msg.style.color='var(--danger)'; return; }
+  const r = await fetch('/api/templates/save-from-compose', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name, subject, body})
+  });
+  const d = await r.json();
+  msg.textContent = d.msg;
+  msg.style.color = d.ok ? 'var(--accent)' : 'var(--danger)';
+  if (d.ok) setTimeout(hideSaveTemplate, 1500);
+}
+</script>
+{% endblock %}
