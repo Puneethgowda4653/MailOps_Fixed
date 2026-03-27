@@ -90,7 +90,84 @@ def _mime_type_for(path):
     return mapping.get(ext, ("application", "octet-stream"))
 
 # ── Build message ──────────────────────────────────────────────────────────────
-def build_message(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths=None, run_id=None):
+def build_email_html(body_html, brand=None, recipient=None, base_url=None, run_id=None):
+    """Wrap body_html with branded header and footer."""
+    b = brand or {}
+    company   = b.get("company_name", "")
+    logo_url  = b.get("logo_url", "")
+    color     = b.get("brand_color", "#00e5a0")
+    footer_tx = b.get("footer_text", "")
+    website   = b.get("website_url", "")
+    address   = b.get("address", "")
+
+    # Header
+    if logo_url:
+        header_content = f'<img src="{logo_url}" alt="{company}" style="max-height:50px;max-width:200px;">'
+    elif company:
+        header_content = f'<span style="font-size:20px;font-weight:700;color:{color};">{company}</span>'
+    else:
+        header_content = ""
+
+    header_html = f"""
+    <div style="background:{color};padding:20px 30px;text-align:center;">
+        {header_content}
+    </div>""" if header_content else ""
+
+    # Unsubscribe link
+    unsub_html = ""
+    if recipient and base_url:
+        email = recipient.get("email", "")
+        unsub_url = f"{base_url}/unsubscribe/{email}"
+        unsub_html = f'<a href="{unsub_url}" style="color:#999;font-size:11px;">Unsubscribe</a>'
+
+    # Footer
+    footer_parts = []
+    if footer_tx:
+        footer_parts.append(f'<p style="margin:0 0 6px 0;">{footer_tx}</p>')
+    if address:
+        footer_parts.append(f'<p style="margin:0 0 6px 0;">{address}</p>')
+    if website:
+        footer_parts.append(f'<p style="margin:0 0 6px 0;"><a href="{website}" style="color:#999;">{website}</a></p>')
+    if unsub_html:
+        footer_parts.append(f'<p style="margin:0;">{unsub_html}</p>')
+
+    footer_html = ""
+    if footer_parts:
+        footer_html = f"""
+    <div style="background:#f5f5f5;padding:16px 30px;text-align:center;
+                font-family:Arial,sans-serif;font-size:12px;color:#999;
+                border-top:1px solid #e0e0e0;">
+        {"".join(footer_parts)}
+    </div>"""
+
+    # Extract banner if present — render it outside the padded body wrapper
+    import re as _re
+    banner_match = _re.search(r'<div class="email-banner"[^>]*>([\s\S]*?)</div>', body_html)
+    banner_block = ""
+    if banner_match:
+        banner_block = f'<div style="line-height:0;font-size:0;">{banner_match.group(1)}</div>'
+        body_html = body_html[:banner_match.start()] + body_html[banner_match.end():]
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{{margin:0;padding:0;background:#f0f0f0;font-family:Arial,sans-serif;font-size:14px;color:#222;}}
+  .email-wrap{{max-width:640px;margin:20px auto;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);}}
+  .email-body{{padding:30px;}}
+  p{{margin:0 0 1em 0;}} a{{color:#1a73e8;}} img{{max-width:100%;height:auto;}}
+</style></head>
+<body>
+<div class="email-wrap">
+  {banner_block}
+  {header_html}
+  <div class="email-body">{body_html}</div>
+  {footer_html}
+</div>
+</body></html>"""
+
+
+def build_message(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths=None, run_id=None, brand=None):
     """
     Build MIME email. Structure:
 
@@ -120,18 +197,15 @@ def build_message(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths
             return f'href="{base_url}/track/click/{run_id}?url={original_url}&e={recipient_email}"'
         body_html = re.sub(r'href="(https?://[^"]+)"', wrap_link, body_html)
 
-    # Wrap body in an email-safe container to preserve fonts, alignment, spacing
+    # Wrap body with branded header + footer
     if not body_html.strip().startswith("<!DOCTYPE") and "<html" not in body_html:
-        body_html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  body{{margin:0;padding:0;background:#ffffff;font-family:Arial,sans-serif;font-size:14px;color:#222222;}}
-  .wrapper{{max-width:640px;margin:0 auto;padding:24px 20px;}}
-  p{{margin:0 0 1em 0;}} a{{color:#1a73e8;}}
-  img{{max-width:100%;height:auto;}}
-</style></head>
-<body><div class="wrapper">{body_html}</div></body></html>"""
+        body_html = build_email_html(
+            body_html,
+            brand=brand,
+            recipient=recipient,
+            base_url=os.getenv("BASE_URL", "http://localhost:5000").rstrip("/"),
+            run_id=run_id,
+        )
 
     plain     = re.sub(r"<[^>]+>", "", body_html)
     valid_att = [p for p in (attachment_paths or []) if p and os.path.exists(p)]
@@ -172,7 +246,7 @@ def build_message(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths
 
 # ── Send one ───────────────────────────────────────────────────────────────────
 def send_one(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths,
-             max_retries, logger, dry_run=False, run_id=None):
+             max_retries, logger, dry_run=False, run_id=None, brand=None):
     email  = recipient["email"]
     result = {
         "email":     email,
@@ -192,7 +266,7 @@ def send_one(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths,
     for attempt in range(1, max_retries + 1):
         result["attempts"] = attempt
         try:
-            msg = build_message(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths, run_id)
+            msg = build_message(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths, run_id, brand=brand)
             ctx = ssl.create_default_context()
             with smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=20) as server:
                 server.ehlo()
@@ -226,7 +300,7 @@ def send_one(smtp_cfg, recipient, subject_tmpl, body_tmpl, attachment_paths,
 # ── Run campaign ───────────────────────────────────────────────────────────────
 def run_campaign(recipients, subject_tmpl, body_tmpl, mode="sequential", delay=0.5,
                  max_workers=10, max_retries=3, attachment_paths=None, dry_run=False,
-                 progress_callback=None, smtp_override=None):
+                 progress_callback=None, smtp_override=None, brand=None):
 
     run_id   = datetime.now().strftime("run_%Y%m%d_%H%M%S")
     logger   = get_run_logger(run_id)
@@ -255,7 +329,7 @@ def run_campaign(recipients, subject_tmpl, body_tmpl, mode="sequential", delay=0
 
     def _send(recipient):
         res = send_one(smtp_cfg, recipient, subject_tmpl, body_tmpl,
-                       valid_att, max_retries, logger, dry_run, run_id)
+                       valid_att, max_retries, logger, dry_run, run_id, brand=brand)
         with lock: results.append(res)
         if progress_callback: progress_callback(res)
         return res

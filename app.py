@@ -23,7 +23,7 @@ from functools import wraps
 from urllib.parse import unquote
 
 from flask import (Flask, render_template, request, redirect, url_for,
-                   flash, jsonify, send_file, session, Response, make_response)
+                   flash, jsonify, send_file, send_from_directory, session, Response, make_response)
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -56,7 +56,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE    = "Lax",
     SESSION_COOKIE_SECURE      = HTTPS_ENABLED,
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=60),
-    MAX_CONTENT_LENGTH         = 16 * 1024 * 1024,
+    MAX_CONTENT_LENGTH         = 100 * 1024 * 1024,
     WTF_CSRF_TIME_LIMIT        = 3600,
 )
 
@@ -135,8 +135,20 @@ _ah = logging.FileHandler("logs/audit.log")
 _ah.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
 _al.addHandler(_ah)
 
-def audit(action, detail=""):
-    _al.info(f"user={session.get('username','anon')} | ip={request.remote_addr} | {action} | {detail}")
+def audit(action, detail="", user=None, ip=None):
+    """Safe to call from background threads — pass user/ip explicitly if outside request context."""
+    try:
+        from flask import has_request_context
+        if has_request_context():
+            u = session.get("username", "anon")
+            i = request.remote_addr
+        else:
+            u = user or "thread"
+            i = ip or "internal"
+    except Exception:
+        u = user or "thread"
+        i = ip or "internal"
+    _al.info(f"user={u} | ip={i} | {action} | {detail}")
 
 # ── Security middleware ────────────────────────────────────────────────────────
 @app.after_request
@@ -177,12 +189,14 @@ def enforce_https_and_session():
 
 @app.errorhandler(CSRFError)
 def csrf_err(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "CSRF token missing or invalid"}), 400
     flash("Security token expired. Try again.", "error")
     return redirect(request.referrer or url_for("index"))
 
 @app.errorhandler(413)
 def too_large(e):
-    flash("File too large. Max 16MB.", "error")
+    flash("File too large. Max 100MB.", "error")
     return redirect(request.referrer or url_for("compose"))
 
 # ── Decorators ─────────────────────────────────────────────────────────────────
@@ -190,6 +204,9 @@ def login_required(f):
     @wraps(f)
     def d(*a, **k):
         if not session.get("logged_in"):
+            # Return JSON for API routes, redirect for normal routes
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Not logged in"}), 401
             flash("Please log in.", "info")
             return redirect(url_for("login", next=request.path))
         return f(*a, **k)
@@ -250,6 +267,7 @@ def sanitize_html(html):
                   "blockquote","span","div","table","thead","tbody","tr","th","td","img","hr"],
             attributes={"a":["href","title","target"],"img":["src","alt","width","height","style"],
                         "*":["style","class","align","valign","bgcolor","border","cellpadding","cellspacing"]},
+            protocols=["http", "https", "mailto", "data"],
             css_sanitizer=css_san,
             strip=True,
         )
@@ -260,6 +278,7 @@ def sanitize_html(html):
                   "blockquote","span","div","table","thead","tbody","tr","th","td","img","hr"],
             attributes={"a":["href","title","target"],"img":["src","alt","width","height","style"],
                         "*":["style","class","align","valign"]},
+            protocols=["http", "https", "mailto", "data"],
             strip=True,
         )
 
@@ -638,6 +657,71 @@ def db_test():
     ok, msg = store.test_connection()
     return jsonify({"ok": ok, "message": msg})
 
+@app.route("/uploads/<path:filename>")
+def serve_upload(filename):
+    """Serve locally stored upload files (images etc.)."""
+    return send_from_directory(os.path.abspath(UPLOAD_FOLDER), filename)
+
+@app.route("/api/upload-image", methods=["POST"])
+def upload_image():
+    """Upload image and return a public URL. Always returns JSON."""
+    if not session.get("logged_in"):
+        return jsonify({"error": "Not logged in"}), 401
+    import base64 as _b64, urllib.request, urllib.parse, json as _json
+    try:
+        f = request.files.get("image")
+        if not f:
+            return jsonify({"error": "No file provided"}), 400
+
+        raw_bytes = f.read()
+        if not raw_bytes:
+            return jsonify({"error": "Empty file"}), 400
+
+        api_key = os.getenv("IMGBB_API_KEY", "")
+
+        if api_key:
+            img_b64 = _b64.b64encode(raw_bytes).decode("utf-8")
+            data = urllib.parse.urlencode({
+                "key":   api_key,
+                "image": img_b64,
+                "name":  secure_filename(f.filename or "banner"),
+            }).encode("utf-8")
+            req = urllib.request.Request("https://api.imgbb.com/1/upload", data=data)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                result = _json.loads(resp.read())
+            if result.get("success"):
+                return jsonify({"url": result["data"]["url"]})
+            return jsonify({"error": "ImgBB upload failed"}), 500
+        else:
+            # Save locally and serve via /uploads/<filename>
+            fname     = secure_filename(f.filename or "banner.jpg")
+            save_path = os.path.join(os.path.abspath(UPLOAD_FOLDER), fname)
+            with open(save_path, "wb") as out:
+                out.write(raw_bytes)
+            base_url = request.host_url.rstrip("/")
+            return jsonify({"url": f"{base_url}/uploads/{fname}", "local": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Exempt upload-image from CSRF — it uses session auth instead
+csrf.exempt(upload_image)
+
+@app.route("/settings/brand", methods=["GET", "POST"])
+@login_required
+def brand_settings():
+    if request.method == "POST":
+        store.save_brand(uid(), {
+            "company_name": request.form.get("company_name", "").strip(),
+            "logo_url":     request.form.get("logo_url", "").strip(),
+            "brand_color":  request.form.get("brand_color", "#00e5a0").strip(),
+            "footer_text":  request.form.get("footer_text", "").strip(),
+            "website_url":  request.form.get("website_url", "").strip(),
+            "address":      request.form.get("address", "").strip(),
+        })
+        flash("Brand settings saved.", "success")
+        return redirect(url_for("brand_settings"))
+    return render_template("brand_settings.html", brand=store.get_brand(uid()))
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH CHECK
@@ -715,6 +799,22 @@ def compose():
         errs    = []
         subject = request.form.get("subject", "").strip()
         body    = request.form.get("body", "").strip()
+        email_header = request.form.get("email_header", "").strip()
+        email_footer = request.form.get("email_footer", "").strip()
+        banner_html  = request.form.get("banner_html",  "").strip()
+        banner_link  = request.form.get("banner_link_url", "").strip()
+
+        # Merge banner + header + body + footer into single body
+        parts = []
+        if banner_html:
+            parts.append(f'<div class="email-banner" style="margin:-30px -30px 20px -30px;line-height:0;">{banner_html}</div>')
+        if email_header:
+            parts.append(f'<div class="email-header-section" style="margin-bottom:20px;">{email_header}</div>')
+        parts.append(body)
+        if email_footer:
+            parts.append(f'<div class="email-footer-section" style="margin-top:24px;padding-top:16px;border-top:1px solid #e0e0e0;">{email_footer}</div>')
+        body = "\n".join(parts)
+
         source  = request.form.get("recipient_source", "file")
         if not subject: errs.append("Subject required.")
         if not body:    errs.append("Body required.")
@@ -796,13 +896,11 @@ def compose():
         session["campaign"] = {
             "pending_id":       _camp_id,
             "subject":          subject,
-            "body":             sanitize_html(body),
             "valid_count":      len(valid),
             "invalid_count":    len(invalid),
             "invalid_emails":   [r.get("email", "") for r in invalid[:10]],
             "mode":             request.form.get("mode", "sequential"),
             "dry_run":          request.form.get("dry_run") == "on",
-            "attachment_paths": att,
         }
         return redirect(url_for("preview"))
 
@@ -840,6 +938,8 @@ def send():
     run_id    = datetime.now().strftime("run_%Y%m%d_%H%M%S")
     started   = datetime.now().isoformat()
     _user_id  = uid()
+    _username = session.get("username", "anon")
+    _ip       = request.remote_addr
     audit("CAMPAIGN_START", f"run_id={run_id} n={c['valid_count']}")
     # Clean up pending campaign from DB now that it's launched
     if c.get("pending_id"):
@@ -874,6 +974,7 @@ def send():
             mode=c["mode"], delay=c["delay"], max_workers=c["max_workers"],
             max_retries=3, attachment_paths=c["attachment_paths"] or None,
             dry_run=c["dry_run"], progress_callback=prog, smtp_override=smtp_cfg,
+            brand=store.get_brand(_user_id),
         )
         fin = datetime.now().isoformat()
         update_campaign_state(run_id, {
@@ -887,7 +988,7 @@ def send():
         # FIX: increment daily quota counter
         if not c.get("dry_run"):
             store.increment_daily_quota(_user_id, s["success"])
-        audit("CAMPAIGN_DONE", f"run_id={run_id} ok={s['success']} fail={s['failed']}")
+        audit("CAMPAIGN_DONE", f"run_id={run_id} ok={s['success']} fail={s['failed']}", user=_username, ip=_ip)
 
     threading.Thread(target=_run, daemon=True).start()
     session["run_id"] = run_id
@@ -1410,6 +1511,7 @@ def schedule():
                     attachment_paths=doc.get("attachment_paths") or None,
                     progress_callback=prog,
                     smtp_override=_smtp_fresh,
+                    brand=store.get_brand(_user_id_t),
                 )
 
                 fin = _dt.utcnow().isoformat()

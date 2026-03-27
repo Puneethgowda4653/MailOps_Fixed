@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Brand Settings{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="page-header">
+    <div>
+      <div class="page-eyebrow">Settings</div>
+      <h1 class="page-title">Brand Settings</h1>
+      <p class="page-sub">Customise the header and footer that appear in every email you send.</p>
+    </div>
+  </div>
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card">
+      <div class="card-title">// Email Header</div>
+
+      <div class="form-group">
+        <label class="form-label">Company / Brand Name</label>
+        <input type="text" name="company_name" value="{{ brand.company_name }}"
+               placeholder="e.g. Acme Corp">
+        <p class="form-hint">Shown in the header if no logo is set.</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Logo URL <span style="color:var(--text-dim);font-weight:400;">(optional)</span></label>
+        <input type="url" name="logo_url" value="{{ brand.logo_url }}"
+               placeholder="https://yoursite.com/logo.png">
+        <p class="form-hint">Direct link to your logo image. Max display height: 50px. Leave blank to use text name instead.</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Brand Colour</label>
+        <div style="display:flex;align-items:center;gap:1rem;">
+          <input type="color" name="brand_color" value="{{ brand.brand_color or '#00e5a0' }}"
+                 style="width:48px;height:36px;padding:2px;border-radius:4px;cursor:pointer;flex-shrink:0;">
+          <input type="text" id="color-hex" value="{{ brand.brand_color or '#00e5a0' }}"
+                 placeholder="#00e5a0" style="width:120px;"
+                 oninput="document.querySelector('[name=brand_color]').value=this.value">
+        </div>
+        <p class="form-hint">Used as the header background colour.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// Email Footer</div>
+
+      <div class="form-group">
+        <label class="form-label">Footer Text</label>
+        <textarea name="footer_text" rows="2"
+                  placeholder="e.g. © 2026 Acme Corp. All rights reserved.">{{ brand.footer_text }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Website URL <span style="color:var(--text-dim);font-weight:400;">(optional)</span></label>
+        <input type="url" name="website_url" value="{{ brand.website_url }}"
+               placeholder="https://yoursite.com">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Mailing Address <span style="color:var(--text-dim);font-weight:400;">(optional)</span></label>
+        <input type="text" name="address" value="{{ brand.address }}"
+               placeholder="e.g. 123 Main St, Bengaluru, India">
+        <p class="form-hint">Required by anti-spam laws (CAN-SPAM, GDPR) for commercial emails.</p>
+      </div>
+    </div>
+
+    <!-- Live Preview -->
+    <div class="card">
+      <div class="card-title">// Preview</div>
+      <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:1rem;">This is how your email will look to recipients.</p>
+      <div id="email-preview" style="border:1px solid var(--border);border-radius:4px;overflow:hidden;max-width:600px;">
+        <!-- Header -->
+        <div id="preview-header" style="padding:20px 30px;text-align:center;background:{{ brand.brand_color or '#00e5a0' }};">
+          {% if brand.logo_url %}
+            <img src="{{ brand.logo_url }}" alt="{{ brand.company_name }}" style="max-height:50px;max-width:200px;">
+          {% elif brand.company_name %}
+            <span style="font-size:20px;font-weight:700;color:#000;">{{ brand.company_name }}</span>
+          {% else %}
+            <span style="font-size:20px;font-weight:700;color:#000;">Your Company Name</span>
+          {% endif %}
+        </div>
+        <!-- Body -->
+        <div style="padding:30px;background:#ffffff;font-family:Arial,sans-serif;font-size:14px;color:#222;">
+          <p>Hi <strong>First Name</strong>,</p>
+          <p>This is where your email body content will appear. All your formatting, images, and links will be shown here exactly as composed.</p>
+          <p>Best regards,<br>{{ brand.company_name or 'Your Team' }}</p>
+        </div>
+        <!-- Footer -->
+        <div style="background:#f5f5f5;padding:16px 30px;text-align:center;font-family:Arial,sans-serif;font-size:12px;color:#999;border-top:1px solid #e0e0e0;">
+          {% if brand.footer_text %}<p style="margin:0 0 4px;">{{ brand.footer_text }}</p>{% endif %}
+          {% if brand.address %}<p style="margin:0 0 4px;">{{ brand.address }}</p>{% endif %}
+          {% if brand.website_url %}<p style="margin:0 0 4px;"><a href="{{ brand.website_url }}" style="color:#999;">{{ brand.website_url }}</a></p>{% endif %}
+          <p style="margin:0;"><a href="#" style="color:#999;font-size:11px;">Unsubscribe</a></p>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">💾 Save Brand Settings</button>
+      <a href="{{ url_for('index') }}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+// Sync color picker with hex input and live preview
+const picker = document.querySelector('[name=brand_color]');
+const hex    = document.getElementById('color-hex');
+const header = document.getElementById('preview-header');
+
+picker.addEventListener('input', function() {
+  hex.value = this.value;
+  header.style.background = this.value;
+});
+hex.addEventListener('input', function() {
+  if (/^#[0-9a-fA-F]{6}$/.test(this.value)) {
+    picker.value = this.value;
+    header.style.background = this.value;
+  }
+});
+</script>
+{% endblock %}

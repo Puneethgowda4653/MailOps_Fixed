@@ -567,3 +567,25 @@ def get_pending_campaign(user_id, campaign_id):
 def delete_pending_campaign(user_id, campaign_id):
     """Clean up after campaign is launched."""
     get_db().pending_campaigns.delete_one({"_id": campaign_id, "user_id": user_id})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BRAND SETTINGS
+# ══════════════════════════════════════════════════════════════════════════════
+def get_brand(user_id):
+    doc = get_db().brand.find_one({"user_id": user_id}) or {}
+    return {
+        "company_name": doc.get("company_name", ""),
+        "logo_url":     doc.get("logo_url", ""),
+        "brand_color":  doc.get("brand_color", "#00e5a0"),
+        "footer_text":  doc.get("footer_text", ""),
+        "website_url":  doc.get("website_url", ""),
+        "address":      doc.get("address", ""),
+    }
+
+def save_brand(user_id, data):
+    get_db().brand.replace_one(
+        {"user_id": user_id},
+        {"user_id": user_id, **data, "updated_at": datetime.utcnow()},
+        upsert=True
+    )
